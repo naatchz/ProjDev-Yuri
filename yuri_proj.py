@@ -9,6 +9,7 @@ from pathlib import Path # fonctions de répertoire
 from tkinter import *
 from datetime import datetime
 import os
+import shutil
 
 node_paths = {} #garder les chemins complets
 
@@ -20,10 +21,15 @@ def display_file_info(event):
         return
 
     file_path = node_paths[selected_nodes[0]]
+    clear_file_info()
+    update_extra_info(file_path)
     if not file_path.is_file():
         return
 
-    file_info = file_path.stat()
+    try:
+        file_info = file_path.stat()
+    except OSError:
+        return
     
     # Mise à jour dynamique des champs d'information
     entry_name.config(state="normal")
@@ -61,18 +67,15 @@ def display_file_info(event):
     entry_permissions.insert(0, " / ".join(perms) if perms else "None")
     entry_permissions.config(state="readonly")
 
-    print("Fichier:", file_path)
-    print("Taille:", file_info.st_size, "octets")
-    print("Date:", datetime.fromtimestamp(file_info.st_mtime))
-    print("Type:", file_path.suffix or "sans extension")
 
 # afficher un répertoire
 def display_directory():
-    tree.delete(*tree.get_children()) # vider le treeview
-    node_paths.clear()
     selected_dir = filedialog.askdirectory()
     if not selected_dir:
         return
+    tree.delete(*tree.get_children()) # vider le treeview
+    node_paths.clear()
+    clear_file_info()
     root_folder = Path(selected_dir) # demander un répertoire
 
     # insérer le noeud racine (déjà ouvert)
@@ -82,6 +85,8 @@ def display_directory():
 
     # appeler la recherche des noeuds enfants
     populate_tree(tree, root_node, root_folder)
+    tree.selection_set(root_node)
+    tree.focus(root_node)
 
     # afficher le tableau des node
     for node, path in node_paths.items():
@@ -92,22 +97,23 @@ def populate_tree(tree, parent, folder):
     # pour tous les noeuds enfants du folder
     try:
         items = list(folder.iterdir())
-    except PermissionError:
+    except OSError:
         return
 
     for item in items:
         item_name = f"📁 {item.name}" if item.is_dir() else f"🗎 {item.name}"
         node = tree.insert(parent, "end", text=item_name)
         node_paths[node] = item # garder l'info du chemin complet
-        if item.is_dir():
+        if item.is_dir() and not item.is_symlink():
             # cas d'un répertoire, rappeler les enfants de l'enfant (peut être long)
             populate_tree(tree,node,item)
 
 
 # Fenêtre principale appelée window
 window = tk.Tk()
-window.title("yuuriy")
-window.geometry("700x500")
+window.title("yuri gremory")
+window.geometry("1100x650")
+window.minsize(950, 600)
 
 # couleurs rouge
 BG = "#160B0D"          
@@ -123,9 +129,9 @@ INPUT = "#1B0F12"
 window.configure(bg=BG)
 
 # configuration de 3 colonnes dans window
-window.columnconfigure(0, weight=1)
-window.columnconfigure(1, weight=1)
-window.columnconfigure(2, weight=1)
+window.columnconfigure(0, weight=3, minsize=280)
+window.columnconfigure(1, weight=2, minsize=230)
+window.columnconfigure(2, weight=3, minsize=320)
 window.rowconfigure(0, weight=1) # une ligne (pour le treeview)
 
 # création du menu principal
@@ -147,7 +153,6 @@ file_menu = tk.Menu(
 ) # menu non détachable
 file_menu.add_command(label="display directory", command=display_directory)
 file_menu.add_separator()
-file_menu.add_command(label="Ecrire Hello", command=lambda : print("hello"))
 file_menu.add_command(label="Quit", command=window.destroy)
 menu_bar.add_cascade(label="File", menu=file_menu) #ajouter File au menu
 
@@ -188,28 +193,124 @@ project_area = tk.Frame(
 )
 project_area.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
 
-project_title = Label(
-    project_area,
-    text="TOOLS",
-    font=("Arial", 11, "bold"),
-    bg=PANEL_ALT,
-    fg=RED_LIGHT
-)
-project_title.pack(anchor="w", padx=10, pady=(10, 8))
+# Panneau de droite : aperçu et informations supplémentaires
+Label(project_area, text="Infos Plus",
+      font=("Arial", 11, "bold"), bg=PANEL_ALT,
+      fg=RED_LIGHT).pack(anchor="w", padx=10, pady=(10, 8))
 
-project_text = Label(
-    project_area,
-    text="Select a file in the\ntree to display its\ninformation.",
-    font=("Arial", 9),
-    bg=PANEL_ALT,
-    fg=TEXT_MUTED,
-    justify="left"
-)
-project_text.pack(anchor="w", padx=10)
+summary_label = Label(project_area, text="Ouvrez un dossier depuis le menu File.",
+                      bg=PANEL_ALT, fg=TEXT, font=("Arial", 10),
+                      justify="left", anchor="w", wraplength=290)
+summary_label.pack(fill="x", padx=10, pady=12)
+
+Label(project_area, text="ESPACE DU DISQUE", bg=PANEL_ALT,
+      fg=TEXT_MUTED, font=("Arial", 9, "bold")).pack(anchor="w", padx=10)
+disk_bar = ttk.Progressbar(project_area, maximum=100, style="Disk.Horizontal.TProgressbar")
+disk_bar.pack(fill="x", padx=10, pady=(7, 5))
+disk_label = Label(project_area, text="—", bg=PANEL_ALT, fg=TEXT_MUTED,
+                   font=("Arial", 9), anchor="w")
+disk_label.pack(fill="x", padx=10)
+
+Label(project_area, text="APERÇU", bg=PANEL_ALT, fg=RED_LIGHT,
+      font=("Arial", 10, "bold")).pack(anchor="w", padx=10, pady=(16, 7))
+preview_frame = Frame(project_area, bg=INPUT)
+preview_frame.pack(fill="both", expand=True, padx=10, pady=(0, 14))
+preview = Text(preview_frame, width=30, height=8, bg=INPUT, fg=TEXT,
+               font=("Consolas", 10), relief="flat", wrap="word",
+               padx=10, pady=10, state="disabled", selectbackground=RED_DARK)
+preview_scroll = ttk.Scrollbar(preview_frame, command=preview.yview)
+preview.configure(yscrollcommand=preview_scroll.set)
+preview_scroll.pack(side="right", fill="y")
+preview.pack(side="left", fill="both", expand=True)
+
+
+def set_preview(text):
+    preview.config(state="normal")
+    preview.delete("1.0", END)
+    preview.insert("1.0", text)
+    preview.config(state="disabled")
+
+
+def format_size(size):
+    for unit in ("o", "Ko", "Mo", "Go", "To"):
+        if size < 1024 or unit == "To":
+            return f"{size:.1f} {unit}"
+        size /= 1024
+
+
+def clear_file_info():
+    for entry in (entry_name, entry_path, entry_type, entry_size,
+                  entry_modified, entry_permissions):
+        entry.config(state="normal")
+        entry.delete(0, END)
+        entry.config(state="readonly")
+
+
+def update_extra_info(path):
+    summary_label.config(text="Informations indisponibles")
+    set_preview("Aperçu indisponible.")
+    try:
+        disk = shutil.disk_usage(path if path.is_dir() else path.parent)
+        percent = disk.used / disk.total * 100 if disk.total else 0
+        disk_bar["value"] = percent
+        disk_label.config(text=f"{percent:.0f}% utilisé · {format_size(disk.free)} libres")
+    except OSError:
+        disk_bar["value"] = 0
+        disk_label.config(text="Disque indisponible")
+
+    try:
+        if path.is_dir():
+            # Résumé du contenu direct, sans compter les sous-dossiers.
+            items = list(path.iterdir())
+            files = [item for item in items if item.is_file()]
+            folders = [item for item in items if item.is_dir()]
+            summary_label.config(text=f"{len(files)} fichiers  ·  {len(folders)} dossiers\n"
+                                      "Contenu direct du dossier")
+            types = {}
+            for item in files:
+                extension = item.suffix.lower() or "Sans extension"
+                types[extension] = types.get(extension, 0) + 1
+            lines = ["TYPES DE FICHIERS", ""]
+            for extension, count in sorted(types.items()):
+                lines.append(f"{extension} : {count}")
+            if not types:
+                lines.append("Aucun fichier dans ce dossier.")
+            set_preview("\n".join(lines))
+        elif path.is_file():
+            info = path.stat()
+            modified = datetime.fromtimestamp(info.st_mtime).strftime("%d.%m.%Y à %H:%M")
+            summary_label.config(text=f"{format_size(info.st_size)}\nModifié le {modified}")
+            text_types = {".txt", ".py", ".md", ".csv", ".json", ".html", ".css",
+                          ".js", ".xml", ".log", ".ini", ".cfg", ".ps1", ".sql",
+                          ".yaml", ".yml", ".sh", ".toml"}
+            if path.suffix.lower() in text_types or not path.suffix:
+                # Lecture limitée : un gros fichier ne remplit pas toute la mémoire.
+                with path.open("rb") as file:
+                    data = file.read(8001)
+                if b"\x00" in data:
+                    set_preview("Aperçu texte indisponible pour ce fichier binaire.")
+                    return
+                try:
+                    content = data[:8000].decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    content = data[:8000].decode("cp1252", errors="replace")
+                if len(data) > 8000:
+                    content += "\n\n[Aperçu limité aux 8 000 premiers octets]"
+                set_preview(content or "Ce fichier est vide.")
+            else:
+                set_preview("Aperçu disponible pour les fichiers texte et le code.\n\n"
+                            "Sélectionnez un fichier .py, .txt, .html, .csv…")
+    except OSError:
+        set_preview("Impossible de lire cet élément : accès refusé ou élément supprimé.")
+
+
+set_preview("Sélectionnez un fichier ou un dossier.")
 
 # Style avec bordures explicites pour le Treeview
 style = ttk.Style()
 style.theme_use("clam")
+style.configure("Disk.Horizontal.TProgressbar", background=RED,
+                troughcolor=INPUT, borderwidth=0, thickness=8)
 
 style.configure(
     "Treeview",
@@ -241,7 +342,7 @@ style.map(
 )
 
 # création du treeview et placement
-tree = ttk.Treeview(tree_frame)
+tree = ttk.Treeview(tree_frame, show="tree headings", selectmode="browse")
 tree.heading("#0", text="Directory Tree")
 tree.grid(row=0, column=0, sticky="nswe", padx=3, pady=3) # placement avec marges
 
