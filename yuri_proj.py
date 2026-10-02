@@ -194,7 +194,7 @@ project_area = tk.Frame(
 project_area.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
 
 # Panneau de droite : aperçu et informations supplémentaires
-Label(project_area, text="Infos Plus",
+Label(project_area, text="INFOS PLUS",
       font=("Arial", 11, "bold"), bg=PANEL_ALT,
       fg=RED_LIGHT).pack(anchor="w", padx=10, pady=(10, 8))
 
@@ -285,6 +285,7 @@ def update_extra_info(path):
                           ".yaml", ".yml", ".sh", ".toml"}
             if path.suffix.lower() in text_types or not path.suffix:
                 # Lecture limitée : un gros fichier ne remplit pas toute la mémoire.
+                # Il lit les premier 8000 caractères
                 with path.open("rb") as file:
                     data = file.read(8001)
                 if b"\x00" in data:
