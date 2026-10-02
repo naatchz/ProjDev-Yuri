@@ -17,8 +17,4 @@ Cette application permet de parcourir un dossier et de consulter les information
 
 Avec Python 3 et Tkinter installés, lancer :
 
-```bash
-python "yuri_proj(2).py"
-```
-
 Dans le menu **File > display directory**, choisir un dossier, puis cliquer sur un élément pour voir ses informations.
