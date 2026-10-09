@@ -158,9 +158,7 @@ file_menu.add_separator()
 file_menu.add_command(label="Quit", command=window.destroy)
 menu_bar.add_cascade(label="File", menu=file_menu) #ajouter File au menu
 
-menu_bar.add_cascade(label="Tools")
 
-menu_bar.add_cascade(label="Help")
 window.config(menu=menu_bar)
 
 # création d'une frame pour le treeview (avec bordure visible)
