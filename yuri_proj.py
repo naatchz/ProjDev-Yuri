@@ -21,6 +21,7 @@ def display_file_info(event):
         return
 
     file_path = node_paths[selected_nodes[0]]
+    # Effacer les anciennes infos et actualiser le panneau de droite.
     clear_file_info()
     update_extra_info(file_path)
     if not file_path.is_file():
@@ -30,8 +31,8 @@ def display_file_info(event):
         file_info = file_path.stat()
     except OSError:
         return
-    
-    # Mise à jour dynamique des champs d'information
+
+    # Remplir les champs, puis les remettre en lecture seule.
     entry_name.config(state="normal")
     entry_name.delete(0, END)
     entry_name.insert(0, file_path.name)
@@ -61,6 +62,7 @@ def display_file_info(event):
 
     entry_permissions.config(state="normal")
     entry_permissions.delete(0, END)
+    # Vérifier les droits de lecture et d’écriture.
     perms = []
     if os.access(file_path, os.R_OK): perms.append("Read")
     if os.access(file_path, os.W_OK): perms.append("Write")
@@ -76,7 +78,7 @@ def display_directory():
     tree.delete(*tree.get_children()) # vider le treeview
     node_paths.clear()
     clear_file_info()
-    root_folder = Path(selected_dir) # demander un répertoire
+    root_folder = Path(selected_dir) # convertir le chemin en objet Path
 
     # insérer le noeud racine (déjà ouvert)
     root_node = tree.insert("","end", text=f"📁 {root_folder.resolve()}",open=True )
@@ -224,6 +226,7 @@ preview_scroll.pack(side="right", fill="y")
 preview.pack(side="left", fill="both", expand=True)
 
 
+# Remplacer le texte de l’aperçu.
 def set_preview(text):
     preview.config(state="normal")
     preview.delete("1.0", END)
@@ -231,6 +234,7 @@ def set_preview(text):
     preview.config(state="disabled")
 
 
+# Convertir la taille en Ko, Mo ou Go pour faciliter la lecture.
 def format_size(size):
     for unit in ("o", "Ko", "Mo", "Go", "To"):
         if size < 1024 or unit == "To":
@@ -238,6 +242,7 @@ def format_size(size):
         size /= 1024
 
 
+# Vider les champs de la colonne du milieu.
 def clear_file_info():
     for entry in (entry_name, entry_path, entry_type, entry_size,
                   entry_modified, entry_permissions):
@@ -245,11 +250,13 @@ def clear_file_info():
         entry.delete(0, END)
         entry.config(state="readonly")
 
-
+#L'ia m'a aidé pour cette partie
+# Mettre à jour le résumé, l’espace disque et l’aperçu.
 def update_extra_info(path):
     summary_label.config(text="Informations indisponibles")
     set_preview("Aperçu indisponible.")
     try:
+        # Récupérer l’espace utilisé et libre du disque.
         disk = shutil.disk_usage(path if path.is_dir() else path.parent)
         percent = disk.used / disk.total * 100 if disk.total else 0
         disk_bar["value"] = percent
@@ -260,12 +267,13 @@ def update_extra_info(path):
 
     try:
         if path.is_dir():
-            # Résumé du contenu direct, sans compter les sous-dossiers.
+            # Compter le contenu direct, sans parcourir les sous-dossiers.
             items = list(path.iterdir())
             files = [item for item in items if item.is_file()]
             folders = [item for item in items if item.is_dir()]
             summary_label.config(text=f"{len(files)} fichiers  ·  {len(folders)} dossiers\n"
                                       "Contenu direct du dossier")
+            # Compter les fichiers pour chaque extension (.py, .txt...).
             types = {}
             for item in files:
                 extension = item.suffix.lower() or "Sans extension"
@@ -284,13 +292,14 @@ def update_extra_info(path):
                           ".js", ".xml", ".log", ".ini", ".cfg", ".ps1", ".sql",
                           ".yaml", ".yml", ".sh", ".toml"}
             if path.suffix.lower() in text_types or not path.suffix:
-                # Lecture limitée : un gros fichier ne remplit pas toute la mémoire.
-                # Il lit les premier 8000 caractères
+                # Limiter l’aperçu à 8000 octets et lire un octet de plus
+                # pour savoir si le fichier dépasse cette limite.
                 with path.open("rb") as file:
                     data = file.read(8001)
                 if b"\x00" in data:
                     set_preview("Aperçu texte indisponible pour ce fichier binaire.")
                     return
+                # Essayer UTF-8, puis un autre encodage si nécessaire.
                 try:
                     content = data[:8000].decode("utf-8-sig")
                 except UnicodeDecodeError:
@@ -357,6 +366,7 @@ label_title = Label(
 )
 label_title.pack(anchor="w", padx=10, pady=(10, 8))
 
+# Créer un titre et son champ sans répéter le même code.
 def create_info_field(parent, label_text):
     Label(
         parent,
